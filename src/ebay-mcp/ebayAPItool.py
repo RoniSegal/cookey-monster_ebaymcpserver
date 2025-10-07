@@ -3,6 +3,7 @@ import json
 import os
 import requests
 from datetime import datetime, timedelta
+import xml.etree.ElementTree as ET
 
 # Function to generate an OAuth2 access token
 def get_access_token(CLIENT_ID, CLIENT_SECRET):
@@ -105,3 +106,100 @@ def make_ebay_api_request(access_token, query=None, ammount=int, upc=None):
         return ebay_search_results
     else:
         print(f"Error: {response.status_code} - {response.text}")
+
+# Function to send a message to an eBay seller using the Trading API
+def send_message_to_seller(user_token, app_id, item_id, recipient_id, subject, message_body):
+    """
+    Send a message to an eBay seller about a specific item.
+    Uses eBay's Trading API (XML/SOAP) with the AddMemberMessageAAQToPartner call.
+    
+    Args:
+        user_token: OAuth user token with messaging permissions
+        app_id: Your eBay application ID (App ID)
+        item_id: The eBay item ID
+        recipient_id: The seller's eBay username
+        subject: Message subject
+        message_body: Message content
+    
+    Returns:
+        Dictionary with success status and message
+    """
+    # eBay Trading API endpoint (use production or sandbox)
+    # Production: https://api.ebay.com/ws/api.dll
+    # Sandbox: https://api.sandbox.ebay.com/ws/api.dll
+    url = "https://api.ebay.com/ws/api.dll"
+    
+    # Build XML request for AddMemberMessageAAQToPartner
+    xml_request = f"""<?xml version="1.0" encoding="utf-8"?>
+<AddMemberMessageAAQToPartnerRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+    <RequesterCredentials>
+        <eBayAuthToken>{user_token}</eBayAuthToken>
+    </RequesterCredentials>
+    <ItemID>{item_id}</ItemID>
+    <MemberMessage>
+        <Subject>{subject}</Subject>
+        <Body>{message_body}</Body>
+        <QuestionType>CustomizedSubject</QuestionType>
+        <RecipientID>{recipient_id}</RecipientID>
+    </MemberMessage>
+</AddMemberMessageAAQToPartnerRequest>"""
+    
+    # Set headers for Trading API
+    headers = {
+        "X-EBAY-API-COMPATIBILITY-LEVEL": "967",
+        "X-EBAY-API-DEV-NAME": app_id,
+        "X-EBAY-API-APP-NAME": app_id,
+        "X-EBAY-API-CERT-NAME": app_id,
+        "X-EBAY-API-SITEID": "0",  # 0 = US site
+        "X-EBAY-API-CALL-NAME": "AddMemberMessageAAQToPartner",
+        "Content-Type": "text/xml; charset=utf-8",
+    }
+    
+    try:
+        response = requests.post(url, data=xml_request.encode('utf-8'), headers=headers)
+        
+        if response.status_code == 200:
+            # Parse XML response
+            root = ET.fromstring(response.content)
+            
+            # Check for eBay API errors
+            ack = root.find(".//{urn:ebay:apis:eBLBaseComponents}Ack")
+            
+            if ack is not None and ack.text in ["Success", "Warning"]:
+                return {
+                    "success": True,
+                    "message": "Message sent successfully to seller",
+                    "ack": ack.text
+                }
+            else:
+                # Extract error details
+                errors = []
+                for error in root.findall(".//{urn:ebay:apis:eBLBaseComponents}Errors"):
+                    error_code = error.find("{urn:ebay:apis:eBLBaseComponents}ErrorCode")
+                    short_message = error.find("{urn:ebay:apis:eBLBaseComponents}ShortMessage")
+                    long_message = error.find("{urn:ebay:apis:eBLBaseComponents}LongMessage")
+                    
+                    error_info = {
+                        "code": error_code.text if error_code is not None else "Unknown",
+                        "short_message": short_message.text if short_message is not None else "Unknown error",
+                        "long_message": long_message.text if long_message is not None else ""
+                    }
+                    errors.append(error_info)
+                
+                return {
+                    "success": False,
+                    "message": "Failed to send message",
+                    "errors": errors
+                }
+        else:
+            return {
+                "success": False,
+                "message": f"HTTP Error: {response.status_code}",
+                "details": response.text
+            }
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Exception occurred: {str(e)}"
+        }

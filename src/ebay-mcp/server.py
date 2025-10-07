@@ -6,7 +6,7 @@ import mcp.server.stdio
 from pydantic import AnyUrl
 import logging
 
-from ebayAPItool import get_access_token, make_ebay_api_request
+from ebayAPItool import get_access_token, make_ebay_api_request, send_message_to_seller
 
 server = Server("mcp-ebay-server")
 logger = logging.getLogger("mcp-ebay-server")
@@ -27,7 +27,7 @@ async def set_logging_level(level: types.LoggingLevel) -> types.EmptyResult:
 @server.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
     """
-    List available search tools.
+    List available tools.
     """
     return [
         types.Tool(
@@ -52,6 +52,32 @@ async def handle_list_tools() -> list[types.Tool]:
                 },
                 "required": ["ammount"],
             },
+        ),
+        types.Tool(
+            name="message-seller",
+            description="Send a message to an eBay seller about a specific item. Useful for asking questions or communicating with sellers.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "item_id": {
+                        "type": "string",
+                        "description": "The eBay item ID for the listing you want to ask about.",
+                    },
+                    "recipient_id": {
+                        "type": "string",
+                        "description": "The seller's eBay username.",
+                    },
+                    "subject": {
+                        "type": "string",
+                        "description": "The subject line of your message.",
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "The body of the message you want to send to the seller.",
+                    },
+                },
+                "required": ["item_id", "recipient_id", "subject", "message"],
+            },
         )
     ]
 
@@ -61,36 +87,58 @@ async def handle_call_tool(
     name: str, arguments: dict | None
 ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
     """
-    Handle search tool execution requests.
+    Handle tool execution requests.
     """
-    if name != "list-auction":
-        raise ValueError(f"Unknown tool: {name}")
-
     if not arguments:
         raise ValueError("Missing arguments")
 
-    query = arguments.get("query")
-    upc = arguments.get("upc")
-    ammount = arguments.get("ammount")
+    if name == "list-auction":
+        query = arguments.get("query")
+        upc = arguments.get("upc")
+        ammount = arguments.get("ammount")
 
-    if not query and not upc:
-        raise ValueError("Missing query or upc - at least one must be provided")
+        if not query and not upc:
+            raise ValueError("Missing query or upc - at least one must be provided")
 
-    if not ammount:
-        ammount = 1
+        if not ammount:
+            ammount = 1
 
+        CLIENT_ID = "Your Ebay Client ID"          # App ID (Client ID)
+        CLIENT_SECRET = "Clint Secret"             # Make a Ebay dev acc to get these
+        access_token = get_access_token(CLIENT_ID, CLIENT_SECRET)
+        search_response = make_ebay_api_request(access_token, query, ammount, upc)
 
-    CLIENT_ID = "Your Ebay Client ID"          # App ID (Client ID)
-    CLIENT_SECRET = "Clint Secret"             # Make a Ebay dev acc to get these
-    access_token = get_access_token(CLIENT_ID, CLIENT_SECRET)
-    search_response = make_ebay_api_request(access_token, query, ammount, upc)
+        return [
+            types.TextContent(
+                type="text",
+                text=str(search_response),
+            )
+        ]
+    
+    elif name == "message-seller":
+        item_id = arguments.get("item_id")
+        recipient_id = arguments.get("recipient_id")
+        subject = arguments.get("subject")
+        message = arguments.get("message")
 
-    return [
-        types.TextContent(
-            type="text",
-            text=str(search_response),
-        )
-    ]
+        if not all([item_id, recipient_id, subject, message]):
+            raise ValueError("Missing required arguments: item_id, recipient_id, subject, and message are all required")
+
+        # OAuth user token required for messaging (not client credentials)
+        USER_TOKEN = "Your Ebay User OAuth Token"  # User OAuth token with messaging permissions
+        APP_ID = "Your Ebay App ID"                # Your eBay application ID
+        
+        response = send_message_to_seller(USER_TOKEN, APP_ID, item_id, recipient_id, subject, message)
+
+        return [
+            types.TextContent(
+                type="text",
+                text=str(response),
+            )
+        ]
+    
+    else:
+        raise ValueError(f"Unknown tool: {name}")
 
 
 async def main():
