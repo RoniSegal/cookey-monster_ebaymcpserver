@@ -6,7 +6,10 @@ Uses the official [MCP Python SDK](https://github.com/modelcontextprotocol/pytho
 
 ## Example
 
-Let's you use prompts like, "Find me 10 auctions for batman comics"
+Let's you use prompts like:
+- "Find me 10 auctions for batman comics"
+- "Search eBay auctions by UPC 883028944163"
+- "Find auctions for items with UPC 883028944163"
 
 ## Components
 
@@ -14,10 +17,13 @@ Let's you use prompts like, "Find me 10 auctions for batman comics"
 
 The server provides a single tool:
 
-- list_auction: Scan ebay for auctions. This tool is helpful for finding auctions on ebay.
-  - Required "query" argument for the search query
-  - Optional "ammount" argument for ammount of results
-    - defaults to 0
+- list_auction: Scan ebay for auctions. This tool is helpful for finding auctions on ebay. Supports searching by text query or UPC/GTIN.
+  - Optional "query" argument for the search query (text-based search)
+  - Optional "upc" argument for UPC/GTIN product code search
+    - At least one of "query" or "upc" must be provided
+    - Both can be used together to refine searches
+  - Required "ammount" argument for ammount of results
+    - Must be a non-negative integer
   - Returns result from Ebay's REST API
 
 ## Installation

@@ -32,13 +32,17 @@ async def handle_list_tools() -> list[types.Tool]:
     return [
         types.Tool(
             name="list-auction",
-            description="Scan ebay for auctions. This tool is helpful for finding auctions on ebay.",
+            description="Scan ebay for auctions. This tool is helpful for finding auctions on ebay. Supports searching by text query or UPC/GTIN.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "The query to search on ebay. This should just be a name not a description.",
+                        "description": "The query to search on ebay. This should just be a name not a description. Optional if upc is provided.",
+                    },
+                    "upc": {
+                        "type": "string",
+                        "description": "The UPC (Universal Product Code) or GTIN to search for. Optional if query is provided.",
                     },
                     "ammount": {
                         "type": "integer",
@@ -46,7 +50,7 @@ async def handle_list_tools() -> list[types.Tool]:
 
                     },
                 },
-                "required": ["query", "ammount"],
+                "required": ["ammount"],
             },
         )
     ]
@@ -66,11 +70,11 @@ async def handle_call_tool(
         raise ValueError("Missing arguments")
 
     query = arguments.get("query")
-
+    upc = arguments.get("upc")
     ammount = arguments.get("ammount")
 
-    if not query:
-        raise ValueError("Missing query")
+    if not query and not upc:
+        raise ValueError("Missing query or upc - at least one must be provided")
 
     if not ammount:
         ammount = 1
@@ -79,7 +83,7 @@ async def handle_call_tool(
     CLIENT_ID = "Your Ebay Client ID"          # App ID (Client ID)
     CLIENT_SECRET = "Clint Secret"             # Make a Ebay dev acc to get these
     access_token = get_access_token(CLIENT_ID, CLIENT_SECRET)
-    search_response = make_ebay_api_request(access_token, query, ammount)
+    search_response = make_ebay_api_request(access_token, query, ammount, upc)
 
     return [
         types.TextContent(

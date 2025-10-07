@@ -51,7 +51,7 @@ def get_access_token(CLIENT_ID, CLIENT_SECRET):
         raise Exception(f"Error generating token: {response.status_code} {response.text}")
 
 # Function to make an authenticated eBay API request
-def make_ebay_api_request(access_token, query=str, ammount=int):
+def make_ebay_api_request(access_token, query=None, ammount=int, upc=None):
     access_token = access_token
 
     # Define the eBay Browse API endpoint
@@ -60,11 +60,24 @@ def make_ebay_api_request(access_token, query=str, ammount=int):
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
     }
+    
+    # Build params based on whether query or UPC is provided
     params = {
-        "q": query,
-        "filter": "buyingOptions:{AUCTION}",
         "limit": ammount,
     }
+    
+    # Build filter string
+    filters = ["buyingOptions:{AUCTION}"]
+    
+    # If UPC is provided, use gtin filter
+    if upc:
+        filters.append(f"gtin:{upc}")
+    
+    params["filter"] = ",".join(filters)
+    
+    # Add query if provided (can be used with or without UPC)
+    if query:
+        params["q"] = query
 
     response = requests.get(url, headers=headers, params=params)
     ebay_search_results = []
