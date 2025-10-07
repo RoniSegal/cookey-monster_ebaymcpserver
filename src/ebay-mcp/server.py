@@ -32,7 +32,7 @@ async def handle_list_tools() -> list[types.Tool]:
     return [
         types.Tool(
             name="list-auction",
-            description="Scan ebay for auctions. This tool is helpful for finding auctions on ebay. Supports searching by text query or UPC/GTIN.",
+            description="Scan ebay for Buy It Now listings. This tool is helpful for finding fixed-price items on ebay. Supports searching by text query or UPC/GTIN.",
             inputSchema={
                 "type": "object",
                 "properties": {

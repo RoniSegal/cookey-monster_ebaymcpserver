@@ -67,7 +67,7 @@ def make_ebay_api_request(access_token, query=None, ammount=int, upc=None):
     }
     
     # Build filter string
-    filters = ["buyingOptions:{AUCTION}"]
+    filters = ["buyingOptions:{FIXED_PRICE}"]
     
     # If UPC is provided, use gtin filter
     if upc:
@@ -85,16 +85,16 @@ def make_ebay_api_request(access_token, query=None, ammount=int, upc=None):
     if response.status_code == 200:
         results = response.json().get("itemSummaries", [])
         if not results:
-            return "No auctions found"
+            return "No listings found"
 
         # Format and display the results
         for item in results:
             title = item.get("title", "N/A")
-            price =  item.get("currentBidPrice", {}).get("value")
-            currency = item.get("currentBidPrice", {}).get("currency", "N/A")
+            price =  item.get("price", {}).get("value")
+            currency = item.get("price", {}).get("currency", "N/A")
             end_date = item.get("itemEndDate", "N/A")
             
-            # Parse and format the auction end time
+            # Parse and format the listing end time if available
             if end_date != "N/A":
                 end_time = datetime.fromisoformat(end_date[:-1]).strftime("%Y-%m-%d %H:%M:%S")
             else:

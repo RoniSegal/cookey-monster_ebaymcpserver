@@ -1,15 +1,15 @@
 # Ebay MCP server
 
-Simple Ebay server that lets you fetch auctions from Ebay.com
+Simple Ebay server that lets you fetch Buy It Now listings from Ebay.com
 
 Uses the official [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) to handle protocol communication and server interactions.
 
 ## Example
 
 Let's you use prompts like:
-- "Find me 10 auctions for batman comics"
-- "Search eBay auctions by UPC 883028944163"
-- "Find auctions for items with UPC 883028944163"
+- "Find me 10 Buy It Now listings for batman comics"
+- "Search eBay Buy It Now listings by UPC 883028944163"
+- "Find fixed-price items with UPC 883028944163"
 
 ## Components
 
@@ -17,14 +17,14 @@ Let's you use prompts like:
 
 The server provides a single tool:
 
-- list_auction: Scan ebay for auctions. This tool is helpful for finding auctions on ebay. Supports searching by text query or UPC/GTIN.
+- list_auction: Scan ebay for Buy It Now listings (fixed-price items). This tool is helpful for finding fixed-price items on ebay. Supports searching by text query or UPC/GTIN.
   - Optional "query" argument for the search query (text-based search)
   - Optional "upc" argument for UPC/GTIN product code search
     - At least one of "query" or "upc" must be provided
     - Both can be used together to refine searches
   - Required "ammount" argument for ammount of results
     - Must be a non-negative integer
-  - Returns result from Ebay's REST API
+  - Returns result from Ebay's REST API (Buy It Now / fixed-price listings only)
 
 ## Installation
 
