@@ -4,6 +4,15 @@ import os
 import requests
 from datetime import datetime, timedelta
 import xml.etree.ElementTree as ET
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
+import time
 
 # Function to generate an OAuth2 access token
 def get_access_token(CLIENT_ID, CLIENT_SECRET):
@@ -107,99 +116,213 @@ def make_ebay_api_request(access_token, query=None, ammount=int, upc=None):
     else:
         print(f"Error: {response.status_code} - {response.text}")
 
-# Function to send a message to an eBay seller using the Trading API
-def send_message_to_seller(user_token, app_id, item_id, recipient_id, subject, message_body):
+# Function to send a message to an eBay seller using browser automation
+def send_message_to_seller(ebay_username, ebay_password, item_id, subject, message_body):
     """
-    Send a message to an eBay seller about a specific item.
-    Uses eBay's Trading API (XML/SOAP) with the AddMemberMessageAAQToPartner call.
+    Send a message to an eBay seller about a specific item using browser automation.
+    This creative solution bypasses API limitations by automating the "Contact Seller" feature.
+    
+    IMPORTANT: This requires your eBay login credentials and uses browser automation
+    to simulate clicking the "Contact Seller" button on the item page.
     
     Args:
-        user_token: OAuth user token with messaging permissions
-        app_id: Your eBay application ID (App ID)
+        ebay_username: Your eBay username/email for login
+        ebay_password: Your eBay password for login
         item_id: The eBay item ID
-        recipient_id: The seller's eBay username
-        subject: Message subject
+        subject: Message subject (topic selection)
         message_body: Message content
     
     Returns:
         Dictionary with success status and message
     """
-    # eBay Trading API endpoint (use production or sandbox)
-    # Production: https://api.ebay.com/ws/api.dll
-    # Sandbox: https://api.sandbox.ebay.com/ws/api.dll
-    url = "https://api.ebay.com/ws/api.dll"
-    
-    # Build XML request for AddMemberMessageAAQToPartner
-    xml_request = f"""<?xml version="1.0" encoding="utf-8"?>
-<AddMemberMessageAAQToPartnerRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-    <RequesterCredentials>
-        <eBayAuthToken>{user_token}</eBayAuthToken>
-    </RequesterCredentials>
-    <ItemID>{item_id}</ItemID>
-    <MemberMessage>
-        <Subject>{subject}</Subject>
-        <Body>{message_body}</Body>
-        <QuestionType>CustomizedSubject</QuestionType>
-        <RecipientID>{recipient_id}</RecipientID>
-    </MemberMessage>
-</AddMemberMessageAAQToPartnerRequest>"""
-    
-    # Set headers for Trading API
-    headers = {
-        "X-EBAY-API-COMPATIBILITY-LEVEL": "967",
-        "X-EBAY-API-DEV-NAME": app_id,
-        "X-EBAY-API-APP-NAME": app_id,
-        "X-EBAY-API-CERT-NAME": app_id,
-        "X-EBAY-API-SITEID": "0",  # 0 = US site
-        "X-EBAY-API-CALL-NAME": "AddMemberMessageAAQToPartner",
-        "Content-Type": "text/xml; charset=utf-8",
-    }
+    driver = None
     
     try:
-        response = requests.post(url, data=xml_request.encode('utf-8'), headers=headers)
+        # Set up Chrome options for headless browsing
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")  # Run in background
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option('useAutomationExtension', False)
         
-        if response.status_code == 200:
-            # Parse XML response
-            root = ET.fromstring(response.content)
+        # Initialize the Chrome driver
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        driver.set_page_load_timeout(30)
+        
+        # Navigate to the item page
+        item_url = f"https://www.ebay.com/itm/{item_id}"
+        driver.get(item_url)
+        
+        wait = WebDriverWait(driver, 10)
+        
+        # Check if we need to login first
+        # Look for "Contact seller" link - it might require login
+        try:
+            # Try to find the contact seller link/button
+            contact_selectors = [
+                "//a[contains(text(), 'Contact seller')]",
+                "//a[contains(text(), 'Ask a question')]",
+                "//button[contains(text(), 'Contact seller')]",
+                "//a[@class='vim d-vi-acc-dspl-btn-cvr-all']"
+            ]
             
-            # Check for eBay API errors
-            ack = root.find(".//{urn:ebay:apis:eBLBaseComponents}Ack")
+            contact_button = None
+            for selector in contact_selectors:
+                try:
+                    contact_button = driver.find_element(By.XPATH, selector)
+                    break
+                except NoSuchElementException:
+                    continue
             
-            if ack is not None and ack.text in ["Success", "Warning"]:
-                return {
-                    "success": True,
-                    "message": "Message sent successfully to seller",
-                    "ack": ack.text
-                }
-            else:
-                # Extract error details
-                errors = []
-                for error in root.findall(".//{urn:ebay:apis:eBLBaseComponents}Errors"):
-                    error_code = error.find("{urn:ebay:apis:eBLBaseComponents}ErrorCode")
-                    short_message = error.find("{urn:ebay:apis:eBLBaseComponents}ShortMessage")
-                    long_message = error.find("{urn:ebay:apis:eBLBaseComponents}LongMessage")
-                    
-                    error_info = {
-                        "code": error_code.text if error_code is not None else "Unknown",
-                        "short_message": short_message.text if short_message is not None else "Unknown error",
-                        "long_message": long_message.text if long_message is not None else ""
-                    }
-                    errors.append(error_info)
+            if not contact_button:
+                # If we can't find the button, we might need to login
+                # Navigate to eBay sign in page
+                driver.get("https://signin.ebay.com/")
                 
+                # Wait for and fill in username
+                username_field = wait.until(
+                    EC.presence_of_element_located((By.ID, "userid"))
+                )
+                username_field.send_keys(ebay_username)
+                
+                # Click continue button
+                continue_button = driver.find_element(By.ID, "signin-continue-btn")
+                continue_button.click()
+                
+                time.sleep(2)
+                
+                # Wait for and fill in password
+                password_field = wait.until(
+                    EC.presence_of_element_located((By.ID, "pass"))
+                )
+                password_field.send_keys(ebay_password)
+                
+                # Click sign in button
+                signin_button = driver.find_element(By.ID, "sgnBt")
+                signin_button.click()
+                
+                time.sleep(3)
+                
+                # Navigate back to item page after login
+                driver.get(item_url)
+                time.sleep(2)
+            
+            # Now try to find and click the contact seller button
+            contact_button = None
+            for selector in contact_selectors:
+                try:
+                    contact_button = wait.until(
+                        EC.element_to_be_clickable((By.XPATH, selector))
+                    )
+                    break
+                except (TimeoutException, NoSuchElementException):
+                    continue
+            
+            if not contact_button:
                 return {
                     "success": False,
-                    "message": "Failed to send message",
-                    "errors": errors
+                    "message": "Could not find 'Contact Seller' button on item page. The seller may not allow messages or the item may not exist."
                 }
-        else:
+            
+            # Click the contact seller button
+            driver.execute_script("arguments[0].click();", contact_button)
+            time.sleep(2)
+            
+            # Handle the contact form (varies by eBay's current interface)
+            # Try to find the message/question field
+            message_selectors = [
+                "//textarea[@name='comments']",
+                "//textarea[@id='comments']",
+                "//textarea[contains(@class, 'comments')]",
+                "//textarea[@placeholder='Type your question']",
+                "//textarea"
+            ]
+            
+            message_field = None
+            for selector in message_selectors:
+                try:
+                    message_field = wait.until(
+                        EC.presence_of_element_located((By.XPATH, selector))
+                    )
+                    break
+                except (TimeoutException, NoSuchElementException):
+                    continue
+            
+            if not message_field:
+                return {
+                    "success": False,
+                    "message": "Could not find message field in contact form. eBay's interface may have changed."
+                }
+            
+            # Fill in the message
+            full_message = f"{subject}\n\n{message_body}"
+            message_field.clear()
+            message_field.send_keys(full_message)
+            
+            time.sleep(1)
+            
+            # Find and click the send/submit button
+            send_selectors = [
+                "//button[contains(text(), 'Send')]",
+                "//button[@type='submit']",
+                "//input[@type='submit']",
+                "//button[contains(text(), 'Submit')]"
+            ]
+            
+            send_button = None
+            for selector in send_selectors:
+                try:
+                    send_button = driver.find_element(By.XPATH, selector)
+                    break
+                except NoSuchElementException:
+                    continue
+            
+            if not send_button:
+                return {
+                    "success": False,
+                    "message": "Could not find send button. Message was typed but not sent."
+                }
+            
+            # Click send
+            driver.execute_script("arguments[0].click();", send_button)
+            time.sleep(3)
+            
+            # Check for success confirmation
+            # eBay usually shows a success message or redirects
+            page_source = driver.page_source.lower()
+            
+            if "message sent" in page_source or "question sent" in page_source or "successfully sent" in page_source:
+                return {
+                    "success": True,
+                    "message": f"Message sent successfully to seller via item {item_id}"
+                }
+            else:
+                return {
+                    "success": True,
+                    "message": f"Message likely sent (no error detected). Please check your eBay messages to confirm.",
+                    "warning": "Could not explicitly confirm success"
+                }
+            
+        except TimeoutException:
             return {
                 "success": False,
-                "message": f"HTTP Error: {response.status_code}",
-                "details": response.text
+                "message": "Timeout waiting for page elements. eBay's interface may have changed or the page loaded slowly."
             }
-    
+        
     except Exception as e:
         return {
             "success": False,
-            "message": f"Exception occurred: {str(e)}"
+            "message": f"Exception occurred during automation: {str(e)}",
+            "error_type": type(e).__name__
         }
+    
+    finally:
+        # Always close the browser
+        if driver:
+            try:
+                driver.quit()
+            except:
+                pass

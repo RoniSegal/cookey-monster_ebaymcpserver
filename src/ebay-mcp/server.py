@@ -55,7 +55,7 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="message-seller",
-            description="Send a message to an eBay seller about a specific item. Useful for asking questions or communicating with sellers.",
+            description="Send a message to an eBay seller about a specific item without prior interaction. Uses browser automation to simulate the 'Contact Seller' feature. Requires eBay login credentials.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -63,20 +63,16 @@ async def handle_list_tools() -> list[types.Tool]:
                         "type": "string",
                         "description": "The eBay item ID for the listing you want to ask about.",
                     },
-                    "recipient_id": {
-                        "type": "string",
-                        "description": "The seller's eBay username.",
-                    },
                     "subject": {
                         "type": "string",
-                        "description": "The subject line of your message.",
+                        "description": "The subject/topic of your message.",
                     },
                     "message": {
                         "type": "string",
                         "description": "The body of the message you want to send to the seller.",
                     },
                 },
-                "required": ["item_id", "recipient_id", "subject", "message"],
+                "required": ["item_id", "subject", "message"],
             },
         )
     ]
@@ -117,18 +113,17 @@ async def handle_call_tool(
     
     elif name == "message-seller":
         item_id = arguments.get("item_id")
-        recipient_id = arguments.get("recipient_id")
         subject = arguments.get("subject")
         message = arguments.get("message")
 
-        if not all([item_id, recipient_id, subject, message]):
-            raise ValueError("Missing required arguments: item_id, recipient_id, subject, and message are all required")
+        if not all([item_id, subject, message]):
+            raise ValueError("Missing required arguments: item_id, subject, and message are all required")
 
-        # OAuth user token required for messaging (not client credentials)
-        USER_TOKEN = "Your Ebay User OAuth Token"  # User OAuth token with messaging permissions
-        APP_ID = "Your Ebay App ID"                # Your eBay application ID
+        # eBay credentials for browser automation
+        EBAY_USERNAME = "Your eBay username/email"  # Your eBay account username or email
+        EBAY_PASSWORD = "Your eBay password"         # Your eBay account password
         
-        response = send_message_to_seller(USER_TOKEN, APP_ID, item_id, recipient_id, subject, message)
+        response = send_message_to_seller(EBAY_USERNAME, EBAY_PASSWORD, item_id, subject, message)
 
         return [
             types.TextContent(

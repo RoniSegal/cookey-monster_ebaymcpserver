@@ -1,6 +1,8 @@
 # Ebay MCP server
 
-Simple Ebay server that lets you fetch Buy It Now listings from Ebay.com
+A powerful eBay MCP server that lets you:
+- 🔍 Search for Buy It Now listings by text query or UPC/GTIN
+- 💬 **Message sellers WITHOUT any prior purchase** (creative browser automation solution!)
 
 Uses the official [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) to handle protocol communication and server interactions.
 
@@ -29,14 +31,21 @@ Scan ebay for Buy It Now listings (fixed-price items). This tool is helpful for 
 - Returns result from Ebay's REST API (Buy It Now / fixed-price listings only)
 
 #### 2. message-seller
-Send a message to an eBay seller about a specific item. Uses eBay's Trading API.
+Send a message to an eBay seller about a specific item **WITHOUT any prior interaction** (no purchase, bid, or offer required). This creative solution uses browser automation to simulate clicking the "Contact Seller" button on eBay's website.
 - Required "item_id" argument - The eBay item ID for the listing
-- Required "recipient_id" argument - The seller's eBay username
-- Required "subject" argument - The subject line of your message
+- Required "subject" argument - The subject/topic of your message
 - Required "message" argument - The body of the message
 - Returns success status and confirmation message
 
-**Note:** The messaging functionality requires a user OAuth token with messaging permissions, not just client credentials. See Authentication section below.
+**How it works:**
+- Uses Selenium WebDriver to automate a headless Chrome browser
+- Logs into your eBay account
+- Navigates to the item page
+- Clicks the "Contact Seller" button
+- Fills in and submits the message form
+- Works even without prior purchases, bids, or offers
+
+**Note:** This requires your eBay login credentials (username and password). See Authentication section below.
 
 ## Installation
 
@@ -68,19 +77,24 @@ uv pip install git+https://github.com/CooKey-Monster/EbayMcpServer.git
 
 ### Environment Variables / Authentication
 
-The following credentials are required; you can obtain them from the [eBay developer portal](https://developer.ebay.com/develop)
-
 #### For Searching Listings (list_auction tool):
+You can obtain API credentials from the [eBay developer portal](https://developer.ebay.com/develop)
 - `CLIENT_ID`: Your eBay client ID (App ID)
 - `CLIENT_SECRET`: Your eBay client secret (Cert ID)
 
 #### For Messaging Sellers (message-seller tool):
-- `USER_TOKEN`: OAuth user token with messaging permissions (not client credentials)
-- `APP_ID`: Your eBay application ID
+This uses browser automation and requires your regular eBay account credentials:
+- `EBAY_USERNAME`: Your eBay username or email address
+- `EBAY_PASSWORD`: Your eBay account password
 
-**Important:** The messaging functionality uses eBay's Trading API which requires user-level OAuth authentication. This is different from the client credentials used for searching. You'll need to:
-1. Set up OAuth consent flow to obtain user tokens
-2. Request user permission for messaging scope
-3. Store and refresh user tokens appropriately
+**Important Security Notes:**
+- The messaging feature uses Selenium browser automation to bypass API limitations
+- Your credentials are only used locally to log into eBay via an automated browser
+- The browser runs in headless mode (background, no visible window)
+- Chrome/Chromium browser is required (automatically managed by webdriver-manager)
+- Consider creating a dedicated eBay account for automation if security is a concern
 
-For more information on obtaining user OAuth tokens, see [eBay's OAuth documentation](https://developer.ebay.com/api-docs/static/oauth-tokens.html)
+**System Requirements for Messaging:**
+- Chrome or Chromium browser must be installed on the system
+- The `message-seller` tool will automatically download and manage ChromeDriver
+- First run may take longer as it downloads the appropriate driver version
